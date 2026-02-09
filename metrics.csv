@@ -1,0 +1,26 @@
+competition_name,metric_name,metric_description,goal,buggy_ignore,default_value_for_buggy
+new-york-city-taxi-fare-prediction,root-mean-squared-error,"The square root of the average of squared differences between predicted and actual values.",minimize,True,8.0
+dog-breed-identification,multi-class-log-loss,"A measure of how well the predicted probabilities match the actual classes in multi-class classification.",minimize,True,1.5
+tensorflow2-question-answering,micro-f1-score,"The harmonic mean of precision and recall calculated over all classes, treating each instance equally.",maximize,False,-0.1
+billion-word-imputation,levenshtein-distance,"The minimum number of single-character edits required to change one word into another, averaged over all predictions.",minimize,True,5.0
+facebook-recruiting-iii-keyword-extraction,micro-f1-score,"The harmonic mean of precision and recall calculated over all classes, treating each instance equally.",maximize,False,-0.1
+smartphone-decimeter-2022,average-haversine-distance,"The average Haversine distance between predicted and actual GPS coordinates.",minimize,True,50.0
+spaceship-titanic,binary_logloss,"A measure of how well the predicted probabilities match the actual binary classes.",minimize,True,0.7
+bms-molecular-translation,eucleidean,"The Euclidean distance between predicted and actual molecular representations.",minimize,True,2.0
+aerial-cactus-identification,auc-roc,"Area Under the Receiver Operating Characteristic Curve, measuring the ability of the model to distinguish between classes.",maximize,False,-0.1
+denoising-dirty-documents,root-mean-squared-error,"The square root of the average of squared differences between predicted and actual pixel values in images.",minimize,True,15.0
+mlsp-2013-birds,auc-roc,"Area Under the Receiver Operating Characteristic Curve, measuring the ability of the model to distinguish between classes.",maximize,False,-0.1
+random-acts-of-pizza,auc-roc,"Area Under the Receiver Operating Characteristic Curve, measuring the ability of the model to distinguish between classes.",maximize,False,-0.1
+nomad2018-predict-transparent-conductors,root-mean-squared-log-error,"The square root of the average of squared logarithmic differences between predicted and actual values.",minimize,True,0.5
+spooky-author-identification,multi-class-log-loss,"A measure of how well the predicted probabilities match the actual classes in multi-class classification.",minimize,True,1.5
+tabular-playground-series-dec-2021,multi-class-accuracy,"The proportion of correctly predicted instances in multi-class classification.",maximize,False,-0.1
+tabular-playground-series-may-2022,auc-roc,"Area Under the Receiver Operating Characteristic Curve, measuring the ability of the model to distinguish between classes.",maximize,False,-0.1
+detecting-insults-in-social-commentary,auc-roc,"Area Under the Receiver Operating Characteristic Curve, measuring the ability of the model to distinguish between classes.",maximize,False,-0.1
+leaf-classification,multi-class-log-loss,"A measure of how well the predicted probabilities match the actual classes in multi-class classification.",minimize,True,1.5
+aptos2019-blindness-detection,quadratic-weighted-kappa,"A measure of agreement between predicted and actual ordinal classes, accounting for the severity of disagreements.",maximize,False,-0.1
+dogs-vs-cats-redux-kernels-edition,log-loss,"A measure of how well the predicted probabilities match the actual binary classes.",minimize,True,0.7
+jigsaw-toxic-comment-classification-challenge,mean-column-wise-roc-auc,"The average ROC AUC score across multiple toxicity categories.",maximize,False,-0.1
+plant-pathology-2020-fgvc7,mean-column-wise-roc-auc,"The average ROC AUC score across multiple plant disease categories.",maximize,False,-0.1
+text-normalization-challenge-english-language,accuracy,"The proportion of correctly predicted instances in text normalization tasks.",maximize,False,-0.1
+ranzcr-clip-catheter-line-classification,auc-roc,"Area Under the Receiver Operating Characteristic Curve, measuring the ability of the model to distinguish between classes.",maximize,False,-0.1
+histopathologic-cancer-detection,auc-roc,"Area Under the Receiver Operating Characteristic Curve, measuring the ability of the model to distinguish between classes.",maximize,False,-0.1
