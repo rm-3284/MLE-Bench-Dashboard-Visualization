@@ -7,6 +7,8 @@ import os
 import argparse
 
 # --- CONFIGURATION ---
+DEFAULT_MODEL = "gemini"  # or "openai"
+
 gemini_client = genai.Client(api_key="")
 GEMINI_MODEL = "gemini-2.0-flash"
 
@@ -97,7 +99,7 @@ def judge_plans_with_openai(plans_list):
         print(f"Error during OpenAI inference: {e}")
         return []
 
-def analyze_all_plans(json_file, llm_provider="gemini"):
+def analyze_all_plans(json_file, llm_provider=DEFAULT_MODEL):
     """
     Analyze all plans and identify redundancy.
     
@@ -151,8 +153,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Judge and identify redundant research plans")
     parser.add_argument("filepath", nargs="?", default="journal_with_judgements.json",
                         help="Path to the journal JSON file")
-    parser.add_argument("--llm", choices=["gemini", "openai"], default="gemini",
-                        help="LLM provider to use for plan judgment (default: gemini)")
+    parser.add_argument("--llm", choices=["gemini", "openai"], default=DEFAULT_MODEL,
+                        help=f"LLM provider to use for plan judgment (default: {DEFAULT_MODEL})")
     
     args = parser.parse_args()
     analyze_all_plans(args.filepath, llm_provider=args.llm)
