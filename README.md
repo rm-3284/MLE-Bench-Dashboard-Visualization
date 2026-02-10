@@ -1,6 +1,6 @@
 # Visualization Pipeline Automation - Complete Documentation Index
 
-## 📋 Quick Navigation
+## Quick Navigation
 
 ### For First-Time Users
 
@@ -15,7 +15,7 @@
 - [TECHNICAL_REFERENCE.md](TECHNICAL_REFERENCE.md) - Implementation details
 - [AUTOMATION_SUMMARY.md](AUTOMATION_SUMMARY.md) - Architecture overview
 
-## 🎯 What This Does
+## What This Does
 
 Automates the visualization pipeline:
 
@@ -25,20 +25,18 @@ journal.json → [Judge] → [Analyze] → [Visualize] → dashboard.html
                         Auto-config from metrics.csv
 ```
 
-## 🚀 Quick Start (30 seconds)
+## Quick Start
 
 ```bash
-cd visualization_final/
-
 # Run with automatic metric configuration
 python run_visualization_pipeline.py ~/path/to/competition-name-uuid/logs/journal.json
 
 # That's it! The dashboard is ready.
 ```
 
-## 📁 Files in This Directory
+## Files in This Directory
 
-### 🎯 Core Pipeline Scripts
+### Core Pipeline Scripts
 
 ```
 run_visualization_pipeline.py          ← Main orchestrator (607 lines)
@@ -62,7 +60,7 @@ plan_judge.py                          ← Plan redundancy analyzer (95 lines)
                                          Outputs: plan_redundancy_report.json
 ```
 
-### 🔧 Batch Processing & Utilities
+### Batch Processing & Utilities
 
 ```
 run_viz_only_all.sh                    ← Batch visualization regenerator (105 lines)
@@ -102,7 +100,7 @@ standardize_journal_format.py          ← Journal format converter (116 lines)
                                          Usage: python script.py --apply [--limit N]
 ```
 
-### 📊 Dashboard & Serving
+### Dashboard & Serving
 
 ```
 generate_hyper_dashboard.py            ← Static hyper-dashboard generator (330 lines)
@@ -117,7 +115,7 @@ serve_hyper_dashboard.py               ← Dynamic dashboard HTTP server (400 li
                                          Usage: python script.py
 ```
 
-### 🧪 Testing & Debugging
+### Testing & Debugging
 
 ```
 test_pipeline.py                       ← Pipeline function tester (15 lines)
@@ -130,7 +128,7 @@ debug_plan_judge.py                    ← Plan judge debugger (147 lines)
                                          Real-time output streaming from plan_judge.py
 ```
 
-### 📚 Documentation
+### Documentation
 
 ```
 IMPLEMENTATION.md                      ← 5-minute project overview
@@ -144,7 +142,7 @@ QUICK_REFERENCE.md                     ← Command cheat sheet
 README_INDEX.md                        ← This file - navigation hub
 ```
 
-### 📦 Configuration & Data
+### Configuration & Data
 
 ```
 metrics.csv                            ← Competition metrics database
@@ -155,7 +153,7 @@ config_0.7_20_3600.jsonl               ← LLM API configuration
 experiments.csv                        ← Experiment tracking data
 ```
 
-### 📝 Generated Files (Created by Pipeline)
+### Generated Files (Created by Pipeline)
 
 ```
 journal_with_judgements.json           ← Judge output (per run)
@@ -171,7 +169,7 @@ hyper_dashboard.html                   ← Index of all run dashboards (top-leve
 run_viz_only_all.log                   ← Batch processing log
 ```
 
-## 🎓 Documentation Structure
+## Documentation Structure
 
 ```
 IMPLEMENTATION.md
@@ -229,7 +227,7 @@ TECHNICAL_REFERENCE.md
 | **Idempotent**         | Safe to run multiple times                               |
 | **Fast Iteration**     | Skip expensive steps with options                        |
 
-## 📊 Workflow Overview
+## Workflow Overview
 
 ```
 USER PROVIDES PATH
@@ -263,7 +261,7 @@ SUCCESS
     └─ Dashboard ready for viewing
 ```
 
-## 🔧 Usage Examples
+## Usage Examples
 
 ### Most Common
 
@@ -294,31 +292,14 @@ for dir in ~/experiments/*/logs; do
 done
 ```
 
-## 📚 Reading Order
-
-**If you have 5 minutes:**
-
-1. [IMPLEMENTATION.md](IMPLEMENTATION.md) - Overview
-
-**If you have 15 minutes:**
-
-1. [IMPLEMENTATION.md](IMPLEMENTATION.md)
-2. [QUICK_START.sh](QUICK_START.sh)
-
-**If you have 30 minutes:**
-
-1. [IMPLEMENTATION.md](IMPLEMENTATION.md)
-2. [PIPELINE_README.md](PIPELINE_README.md)
-3. [QUICK_START.sh](QUICK_START.sh)
-
-**If you want to understand everything:**
+## Reading Order
 
 1. [IMPLEMENTATION.md](IMPLEMENTATION.md) - Overview
 2. [PIPELINE_README.md](PIPELINE_README.md) - Complete guide
 3. [TECHNICAL_REFERENCE.md](TECHNICAL_REFERENCE.md) - Deep dive
 4. [AUTOMATION_SUMMARY.md](AUTOMATION_SUMMARY.md) - Architecture
 
-## ❓ FAQ
+## FAQ
 
 ### Q: What's the path format?
 
@@ -352,12 +333,11 @@ A: Yes! Use `--metrics /path/to/metrics.csv`
 
 A: Yes! Uses pathlib for cross-platform compatibility.
 
-## 🚀 Next Steps
+## Next Steps
 
 1. **Try it immediately**:
 
    ```bash
-   cd visualization_final/
    python run_visualization_pipeline.py --help
    ```
 
@@ -378,14 +358,7 @@ A: Yes! Uses pathlib for cross-platform compatibility.
    open journal_viz_tree_dashboard.html  # View in browser
    ```
 
-## 📝 Version Info
-
-- **Created**: February 3, 2026
-- **Status**: ✅ Production ready
-- **Location**: `visualization_final/`
-- **Tested with**: Python 3.7+, macOS, Linux
-
-## 🤝 Support
+## Support
 
 ### Common Issues
 
@@ -419,20 +392,3 @@ print(f'Competition: {comp}')
 print(f'Working Dir: {wd}')
 "
 ```
-
----
-
-## Summary
-
-You now have a complete, automated visualization pipeline that:
-
-✅ Takes a single path argument  
-✅ Auto-detects competition from path  
-✅ Loads metrics from CSV  
-✅ Configures visualization automatically  
-✅ Runs all 3 steps sequentially  
-✅ Produces an interactive dashboard
-
-**No manual editing of code required!**
-
-Start with [IMPLEMENTATION.md](IMPLEMENTATION.md) to learn more.
