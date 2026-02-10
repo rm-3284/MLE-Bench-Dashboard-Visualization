@@ -214,7 +214,7 @@ TECHNICAL_REFERENCE.md
 └─ Future Enhancements
 ```
 
-## ✨ Key Features at a Glance
+## Key Features at a Glance
 
 | Feature                | Details                                                  |
 | ---------------------- | -------------------------------------------------------- |
