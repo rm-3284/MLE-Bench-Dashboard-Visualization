@@ -171,16 +171,16 @@ def main():
     if failed_count > 0:
         fixed_path = str(journal_path).replace(".json", "_fixed.json")
         with open(fixed_path, 'w') as f:
-            json.dump(raw_data if "nodes" in raw_data else nodes, f, indent=2)
+            json.dump(nodes, f, indent=2)
         
         print(f"\n⚠ Fixed {fixed_count} entries but {failed_count} still have errors")
         print(f"⚠ Saved to: {fixed_path}")
         print(f"Review before applying: mv {fixed_path} {journal_path}")
         return False
     else:
-        # All entries successfully fixed - replace original
+        # All entries successfully fixed - replace original (always save as list)
         with open(journal_path, 'w') as f:
-            json.dump(raw_data if "nodes" in raw_data else nodes, f, indent=2)
+            json.dump(nodes, f, indent=2)
         
         print(f"\n✓ Successfully fixed all {fixed_count} error entries")
         print(f"✓ Updated: {journal_path}")
