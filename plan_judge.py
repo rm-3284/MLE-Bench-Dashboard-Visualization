@@ -5,17 +5,18 @@ from openai import OpenAI
 import sys
 import os
 import argparse
+import time
 
 # --- CONFIGURATION ---
 DEFAULT_MODEL = "gemini"  # or "openai"
 
-gemini_client = genai.Client(api_key="")
+gemini_client = genai.Client(api_key="YOUR_GOOGLE_KEY_HERE")  # Replace with your actual key or set as env variable
 GEMINI_MODEL = "gemini-2.0-flash"
 
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
 OPENAI_MODEL = "gpt-4-turbo"
 
-def judge_plans_with_gemini(plans_list):
+def judge_plans_with_gemini(plans_list, max_retries=3):
     """
     Groups plans by semantic intent using Gemini.
     Returns a list of lists containing indices.
@@ -36,26 +37,33 @@ def judge_plans_with_gemini(plans_list):
     If no plans are identical, return [].
     """
 
-    try:
-        response = gemini_client.models.generate_content(
-            model=GEMINI_MODEL, 
-            contents=prompt
-        )
-        print(prompt) # Debug: Show the prompt sent to Gemini
-        print(f"Gemini response: {response.text}") # Debug: Show raw response
-        # Clean potential markdown from the response
-        text = response.text.strip()
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-        
-        return json.loads(text)
-    except Exception as e:
-        print(f"Error during Gemini inference: {e}")
-        return []
+    for attempt in range(max_retries):
+        try:
+            response = gemini_client.models.generate_content(
+                model=GEMINI_MODEL, 
+                contents=prompt
+            )
+            print(prompt) # Debug: Show the prompt sent to Gemini
+            print(f"Gemini response: {response.text}") # Debug: Show raw response
+            # Clean potential markdown from the response
+            text = response.text.strip()
+            if text.startswith("```"):
+                text = text.split("```")[1]
+                if text.startswith("json"):
+                    text = text[4:]
+            
+            return json.loads(text)
+        except Exception as e:
+            # Check if it's a rate limit error
+            if "429" in str(e) and attempt < max_retries - 1:
+                wait_time = 2 ** attempt  # 1s, 2s, 4s
+                print(f"⚠ Rate limit (429), waiting {wait_time}s before retry...", flush=True)
+                time.sleep(wait_time)
+                continue
+            print(f"Error during Gemini inference: {e}")
+            return []
 
-def judge_plans_with_openai(plans_list):
+def judge_plans_with_openai(plans_list, max_retries=3):
     """
     Groups plans by semantic intent using OpenAI.
     Returns a list of lists containing indices.
@@ -76,28 +84,35 @@ def judge_plans_with_openai(plans_list):
     If no plans are identical, return [].
     """
 
-    try:
-        response = openai_client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": "You are an AI research auditor that identifies duplicate research plans based on intent."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0
-        )
-        print(prompt) # Debug: Show the prompt sent to OpenAI
-        print(f"OpenAI response: {response.choices[0].message.content}") # Debug: Show raw response
-        # Clean potential markdown from the response
-        text = response.choices[0].message.content.strip()
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-        
-        return json.loads(text)
-    except Exception as e:
-        print(f"Error during OpenAI inference: {e}")
-        return []
+    for attempt in range(max_retries):
+        try:
+            response = openai_client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": "You are an AI research auditor that identifies duplicate research plans based on intent."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0
+            )
+            print(prompt) # Debug: Show the prompt sent to OpenAI
+            print(f"OpenAI response: {response.choices[0].message.content}") # Debug: Show raw response
+            # Clean potential markdown from the response
+            text = response.choices[0].message.content.strip()
+            if text.startswith("```"):
+                text = text.split("```")[1]
+                if text.startswith("json"):
+                    text = text[4:]
+            
+            return json.loads(text)
+        except Exception as e:
+            # Check if it's a rate limit error
+            if "429" in str(e) and attempt < max_retries - 1:
+                wait_time = 2 ** attempt  # 1s, 2s, 4s
+                print(f"⚠ Rate limit (429), waiting {wait_time}s before retry...", flush=True)
+                time.sleep(wait_time)
+                continue
+            print(f"Error during OpenAI inference: {e}")
+            return []
 
 def analyze_all_plans(json_file, llm_provider=DEFAULT_MODEL):
     """
