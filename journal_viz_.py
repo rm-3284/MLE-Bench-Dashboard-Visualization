@@ -335,7 +335,9 @@ def main():
 
         function getMetric(s) {
             if(!s) return null;
-            return typeof s.metric === 'number' ? s.metric : (s.metric?.value || null);
+            if (typeof s.metric === 'number') return s.metric;
+            if (typeof s.metric?.value === 'number') return s.metric.value;
+            return null;
         }
 
         function getStatusColor(status) {
@@ -357,18 +359,16 @@ def main():
 
             const dataPts = realSteps.map(s => {
                 let val = getMetric(s);
-                
+                // Buggy node handling
                 if (s.is_buggy) {
                     if (CONF_FORCE_DEFAULT) {
                         val = CONF_DEFAULT_VAL;
                     } else if (val === null) {
                         if (CONF_IGNORE_MISSING) return null;
-                        val = CONF_DEFAULT_VAL;
+                        // Leave val as null (do not set to 0.0 or CONF_DEFAULT_VAL)
                     }
                 }
-                
                 if (val === null) return null;
-                
                 // --- Pass 'is_buggy' status to the data point ---
                 return {x: s.step, y: val, is_buggy: s.is_buggy};
             }).filter(d => d !== null).sort((a,b) => a.x - b.x);
@@ -481,13 +481,20 @@ def main():
             });
             document.getElementById('detail-verification').style.display = 'block';
 
-            const mVal = getMetric(step) || 0;
+            let mVal = getMetric(step);
+            // Show 'null' for buggy nodes with null metric
+            if (step.is_buggy && mVal === null) {
+                mVal = 'null';
+            } else {
+                mVal = mVal || 0;
+            }
             const jud = step.llm_judgment || {};
             
             const statusText = step.is_buggy ? "BUGGY" : "VALID";
             const statusColor = step.is_buggy ? "var(--buggy)" : "var(--valid)";
             
             document.getElementById('detail-stats').innerHTML = `<div class="metric-card"><label>Step</label><span>${step.step}</span></div><div class="metric-card"><label>Status</label><span style="color:${statusColor}">${statusText}</span></div><div class="metric-card"><label>Exec Time</label><span>${step.exec_time || 'N/A'}s</span></div><div class="metric-card"><label>${METRIC_NAME}</label><span>${Number(mVal).toFixed(4)}</span></div><div class="metric-card"><label>Magnitude</label><span>${step.magnitude || '0'}</span></div>`;
+            document.getElementById('detail-stats').innerHTML = `<div class="metric-card"><label>Step</label><span>${step.step}</span></div><div class="metric-card"><label>Status</label><span style="color:${statusColor}">${statusText}</span></div><div class="metric-card"><label>Exec Time</label><span>${step.exec_time || 'N/A'}s</span></div><div class="metric-card"><label>${METRIC_NAME}</label><span>${mVal === 'null' ? 'null' : Number(mVal).toFixed(4)}</span></div><div class="metric-card"><label>Magnitude</label><span>${step.magnitude || '0'}</span></div>`;
 
             document.getElementById('detail-verification').innerHTML = `
                 <h3>🤖 LLM Verification</h3>
