@@ -24,3 +24,7 @@ plant-pathology-2020-fgvc7,mean-column-wise-roc-auc,"The average ROC AUC score a
 text-normalization-challenge-english-language,accuracy,"The proportion of correctly predicted instances in text normalization tasks.",maximize,False,-0.1
 ranzcr-clip-catheter-line-classification,auc-roc,"Area Under the Receiver Operating Characteristic Curve, measuring the ability of the model to distinguish between classes.",maximize,False,-0.1
 histopathologic-cancer-detection,auc-roc,"Area Under the Receiver Operating Characteristic Curve, measuring the ability of the model to distinguish between classes.",maximize,False,-0.1
+siim-isic-melanoma-classification,auc-roc,"Area Under the Receiver Operating Characteristic Curve, measuring the ability of the model to distinguish between classes.",maximize,False,-0.1
+the-icml-2013-whale-challenge-right-whale-redux,auc-roc,"Area Under the Receiver Operating Characteristic Curve, measuring the ability of the model to distinguish between classes.",maximize,False,-0.1
+text-normalization-challenge-english-language,accuracy,"The proportion of correctly predicted instances in text normalization tasks.",maximize,False,-0.1
+text-normalization-challenge-russian-language,accuracy,"The proportion of correctly predicted instances in text normalization tasks.",maximize,False,-0.1
