@@ -8,13 +8,13 @@ import argparse
 import time
 
 # --- CONFIGURATION ---
-DEFAULT_MODEL = "gemini"  # or "openai"
+DEFAULT_MODEL = "openai"  # or "gemini"
 
-gemini_client = genai.Client(api_key="YOUR_GOOGLE_KEY_HERE")  # Replace with your actual key or set as env variable
-GEMINI_MODEL = "gemini-2.0-flash"
+gemini_client = genai.Client(api_key="")  # Replace with your actual key or set as env variable
+GEMINI_MODEL = "gemini-2.5-flash"
 
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
-OPENAI_MODEL = "gpt-4-turbo"
+openai_client = OpenAI(api_key="")
+OPENAI_MODEL = "gpt-4o-mini"
 
 def judge_plans_with_gemini(plans_list, max_retries=3):
     """
@@ -148,8 +148,29 @@ def analyze_all_plans(json_file, llm_provider=DEFAULT_MODEL):
         
         # Map indices back to the actual Step numbers for clarity
         step_groups = []
+        if not isinstance(groups, list):
+            print(f"  ⚠ Invalid groups format for parent {display_id}: expected list, got {type(groups).__name__}")
+            groups = []
+
+        max_idx = len(children) - 1
         for group in groups:
-            step_group = [children[idx]['step'] for idx in group]
+            if not isinstance(group, list):
+                continue
+
+            valid_indices = [
+                idx for idx in group
+                if isinstance(idx, int) and 0 <= idx <= max_idx
+            ]
+
+            if len(valid_indices) < 2:
+                if group:
+                    print(
+                        f"  ⚠ Skipping invalid/degenerate group for parent {display_id}: "
+                        f"{group} (valid: {valid_indices}, max_idx={max_idx})"
+                    )
+                continue
+
+            step_group = [children[idx].get('step', children[idx].get('id', idx)) for idx in valid_indices]
             step_groups.append(sorted(step_group))
         
         if step_groups:

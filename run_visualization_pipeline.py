@@ -15,13 +15,15 @@ Usage:
                     Metrics will be auto-loaded from metrics.csv using startswith() matching
     
     Options:
-    --skip-judge    Skip the judgment step (use existing journal_with_judgements.json)
+    --skip-judge    Skip judgment step (use existing journal_with_judgements.json)
+    --mock-judge    Create mock judgments without API calls (for quick iteration)
     --skip-plan     Skip the plan redundancy analysis
     --output FILE   Specify custom HTML output filename (default: journal_viz_tree_dashboard.html)
     --metrics FILE  Path to metrics.csv (default: metrics.csv in current dir)
 
 Examples:
     python run_visualization_pipeline.py ~/data/tensorflow2-question-answering_abc123/logs/journal.json
+    python run_visualization_pipeline.py ~/data/tensorflow2-question-answering_abc123/logs --mock-judge --output fast_viz.html
     python run_visualization_pipeline.py ~/data/tensorflow2-question-answering_abc123/logs --skip-judge --output final.html
 """
 
@@ -35,6 +37,7 @@ import csv
 import re
 from pathlib import Path
 import traceback
+from collections import defaultdict
 
 # Color codes for terminal output
 class Colors:
@@ -86,8 +89,8 @@ def parse_journal_path(journal_path):
     parent_name = working_dir.parent.name  # Get the competition_name_log_id dir
     
     # Split by the last underscore to separate competition_name from log_id
-    parts = parent_name.rsplit('_', 1)
-    if len(parts) != 2:
+    parts = parent_name.split('_')
+    if len(parts) < 2:
         log("WARNING", f"Could not parse competition/log_id from: {parent_name}")
         return None, None, working_dir, journal_file
     
@@ -204,6 +207,97 @@ def check_file_exists(filepath, description):
         return True
     else:
         log("ERROR", f"Missing {description}: {p}")
+        return False
+
+
+def build_tree_structure(steps, node2parent):
+    """
+    Update parent and children relationships in steps based on node2parent mapping.
+    
+    Args:
+        steps: List of node dictionaries with 'id' field
+        node2parent: Dict mapping child_node_id -> parent_node_id
+    """
+    # Build parent and children mappings from node2parent
+    children_map = defaultdict(list)
+    parent_map = {}
+    
+    for child_id, parent_id in node2parent.items():
+        parent_map[child_id] = parent_id
+        children_map[parent_id].append(child_id)
+    
+    # Update nodes with correct parent and children relationships
+    for node in steps:
+        if not isinstance(node, dict) or "id" not in node:
+            continue
+        
+        node_id = node["id"]
+        
+        # Update parent field based on node2parent mapping
+        if node_id in parent_map:
+            node["parent"] = parent_map[node_id]
+        else:
+            node["parent"] = None
+        
+        # Update children list based on children_map
+        if node_id in children_map:
+            node["children"] = sorted(children_map[node_id])
+        else:
+            node["children"] = []
+
+
+def create_mock_judgements(working_dir):
+    """Create journal_with_judgements.json with mock judgments (no API calls)"""
+    log("STEP", "STEP 1: Creating Mock Judgments (No API Calls)")
+    
+    # Check prerequisites
+    if not check_file_exists("journal.json", "Input journal"):
+        dump_directory_contents(working_dir)
+        return False
+    
+    try:
+        # Read journal.json
+        with open("journal.json", 'r', encoding='utf-8') as f:
+            raw_data = json.load(f)
+        
+        # Extract node2parent mapping if available
+        node2parent = {}
+        if isinstance(raw_data, dict):
+            node2parent = raw_data.get("node2parent", {})
+        
+        # Handle different JSON structures (list vs dict)
+        if isinstance(raw_data, dict) and "nodes" in raw_data:
+            steps = raw_data["nodes"]
+        elif isinstance(raw_data, list):
+            steps = raw_data
+        else:
+            log("ERROR", "Unknown JSON structure in journal.json")
+            return False
+        
+        # Add mock judgments to each step
+        for step in steps:
+            if 'llm_judgment' not in step:
+                # Add minimal mock judgment
+                step['llm_judgment'] = {
+                    "status": "skipped",
+                    "reason": "Mock judgment (use real judge for production)"
+                }
+        
+        # Build tree structure from node2parent mapping if available
+        if node2parent:
+            log("INFO", "Building tree structure from node2parent mapping...")
+            build_tree_structure(steps, node2parent)
+        
+        # Save Results
+        with open("journal_with_judgements.json", 'w', encoding='utf-8') as f:
+            json.dump(steps, f, indent=4)
+        
+        log("SUCCESS", "Mock judgments created: journal_with_judgements.json")
+        return True
+        
+    except Exception as e:
+        log("ERROR", f"Failed to create mock judgments: {e}")
+        log("ERROR", traceback.format_exc())
         return False
 
 
@@ -488,6 +582,11 @@ Examples:
         help="Skip judgment step (use existing journal_with_judgements.json)"
     )
     parser.add_argument(
+        "--mock-judge",
+        action="store_true",
+        help="Create mock judgments without API calls (for quick iteration)"
+    )
+    parser.add_argument(
         "--skip-plan",
         action="store_true",
         help="Skip plan redundancy analysis"
@@ -499,7 +598,7 @@ Examples:
     )
     parser.add_argument(
         "--metrics",
-        default="metrics.csv",
+        default="/Users/ryomitsuhashi/Desktop/Princeton/Research/mle-agent/visualization_final/metrics.csv",
         help="Path to metrics.csv (default: metrics.csv)"
     )
     
@@ -514,20 +613,14 @@ Examples:
     print(f"{Colors.END}\n")
     
     # Parse journal path and load metrics
-    if args.journal_path:
-        log("STEP", "STEP 0: Loading Configuration")
-        competition_name, log_id, working_dir, journal_file = parse_journal_path(args.journal_path)
-        
+    def run_pipeline_for_journal(journal_path, args):
+        competition_name, log_id, working_dir, journal_file = parse_journal_path(journal_path)
         if not journal_file:
-            log("ERROR", f"Could not find journal.json in {args.journal_path}")
+            log("ERROR", f"Could not find journal.json in {journal_path}")
             return 1
-        
         log("SUCCESS", f"Found journal.json: {journal_file}")
-        
         if competition_name and log_id:
             log("SUCCESS", f"Extracted: competition={competition_name}, log_id={log_id}")
-            
-            # Load metrics from CSV
             metrics_info = load_metrics_from_csv(competition_name, args.metrics)
             if metrics_info:
                 log("SUCCESS", f"Loaded metrics: {metrics_info['metric_name']}")
@@ -539,80 +632,112 @@ Examples:
         else:
             log("WARNING", "Could not extract competition name; using defaults")
             metrics_info = None
-        
-        # Change to working directory
         if not setup_working_directory(working_dir):
             return 1
-        
-        # Update journal_viz_.py if metrics were loaded
         if metrics_info:
             if not update_journal_viz_config(metrics_info, competition_name):
                 log("WARNING", "Proceeding with default configuration")
         else:
-            # Still update with competition name even if no metrics
             if competition_name:
                 update_journal_viz_config({"metric_name": "Score", "metric_description": "Metric", "goal": "maximize", "ignore_buggy_without_metric": False, "default_buggy_metric": -0.1}, competition_name)
-    else:
-        log("INFO", "No journal path provided; using current directory")
-        working_dir = Path.cwd()
-        metrics_info = None
-    
-    # Track success
-    steps_completed = []
-    steps_failed = []
-    
-    # Step 1: Judge Journal
-    if args.skip_judge:
-        log("INFO", "Skipping judgment step (--skip-judge)")
-        if check_file_exists(str(working_dir / "journal_with_judgements.json"), "journal_with_judgements.json"):
+        # Track success
+        steps_completed = []
+        steps_failed = []
+        # Step 1: Judge Journal
+        judged_file = working_dir / "journal_with_judgements.json"
+        if args.skip_judge:
+            log("INFO", "Skipping judgment step (--skip-judge)")
+            if check_file_exists(str(judged_file), "journal_with_judgements.json"):
+                steps_completed.append("judge")
+            else:
+                log("ERROR", "Cannot skip judge step: journal_with_judgements.json not found")
+                steps_failed.append("judge")
+        elif args.mock_judge:
+            if judged_file.exists():
+                log("INFO", "Skipping judgment step (existing journal_with_judgements.json found)")
+                steps_completed.append("judge")
+            else:
+                log("INFO", "Creating mock judgments (--mock-judge, no API calls)")
+                if create_mock_judgements(working_dir):
+                    steps_completed.append("judge")
+                else:
+                    steps_failed.append("judge")
+        elif judged_file.exists():
+            log("INFO", "Skipping judgment step (existing journal_with_judgements.json found)")
             steps_completed.append("judge")
         else:
-            log("ERROR", "Cannot skip judge step: journal_with_judgements.json not found")
-            steps_failed.append("judge")
-    else:
-        if run_judge_journal(working_dir):
-            steps_completed.append("judge")
-        else:
-            steps_failed.append("judge")
-    
-    # Step 2: Plan Redundancy Analysis
-    if steps_failed and "judge" in steps_failed:
-        log("ERROR", "Skipping plan analysis due to judge failure")
-        steps_failed.append("plan")
-    elif args.skip_plan:
-        log("INFO", "Skipping plan analysis (--skip-plan)")
-        steps_completed.append("plan")
-    else:
-        if run_plan_judge(working_dir):
+            if run_judge_journal(working_dir):
+                steps_completed.append("judge")
+            else:
+                steps_failed.append("judge")
+        # Step 2: Plan Redundancy Analysis
+        plan_report_file = working_dir / "plan_redundancy_report.json"
+        if steps_failed and "judge" in steps_failed:
+            log("ERROR", "Skipping plan analysis due to judge failure")
+            steps_failed.append("plan")
+        elif args.skip_plan:
+            log("INFO", "Skipping plan analysis (--skip-plan)")
+            steps_completed.append("plan")
+        elif plan_report_file.exists():
+            log("INFO", "Skipping plan analysis (existing plan_redundancy_report.json found)")
             steps_completed.append("plan")
         else:
-            steps_failed.append("plan")
-    
-    # Step 3: Generate Visualization
-    if steps_failed and "judge" in steps_failed:
-        log("ERROR", "Skipping visualization due to judge failure")
-        steps_failed.append("viz")
-    else:
-        if run_visualization(args.output, working_dir):
-            steps_completed.append("viz")
-        else:
+            if run_plan_judge(working_dir):
+                steps_completed.append("plan")
+            else:
+                steps_failed.append("plan")
+        # Step 3: Generate Visualization
+        if steps_failed and "judge" in steps_failed:
+            log("ERROR", "Skipping visualization due to judge failure")
             steps_failed.append("viz")
-    
-    # Print summary
-    log("STEP", "PIPELINE SUMMARY")
-    log("SUCCESS", f"Completed: {', '.join(steps_completed) if steps_completed else 'None'}")
-    if steps_failed:
-        log("ERROR", f"Failed: {', '.join(steps_failed)}")
-        print(f"\n{Colors.RED}Pipeline FAILED{Colors.END}\n")
-        return 1
-    else:
-        print(f"\n{Colors.GREEN}Pipeline COMPLETED SUCCESSFULLY{Colors.END}")
-        print(f"\n{Colors.BOLD}Output:{Colors.END}")
-        print(f"  • journal_with_judgements.json")
-        print(f"  • plan_redundancy_report.json")
-        print(f"  • {args.output}")
-        print()
+        else:
+            if run_visualization(args.output, working_dir):
+                steps_completed.append("viz")
+            else:
+                steps_failed.append("viz")
+        # Print summary
+        log("STEP", "PIPELINE SUMMARY")
+        log("SUCCESS", f"Completed: {', '.join(steps_completed) if steps_completed else 'None'}")
+        if steps_failed:
+            log("ERROR", f"Failed: {', '.join(steps_failed)}")
+            print(f"\n{Colors.RED}Pipeline FAILED{Colors.END}\n")
+            return 1
+        else:
+            print(f"\n{Colors.GREEN}Pipeline COMPLETED SUCCESSFULLY{Colors.END}")
+            print(f"\n{Colors.BOLD}Output:{Colors.END}")
+            print(f"  • journal_with_judgements.json")
+            print(f"  • plan_redundancy_report.json")
+            print(f"  • {args.output}")
+            print()
+            return 0
+
+    # If journal_path matches *_run-group_aide, recursively search for */logs/journal.json and run pipeline for each
+    import fnmatch
+    if args.journal_path and fnmatch.fnmatch(os.path.basename(str(args.journal_path)), "*_run-group_aide"):
+        root_dir = Path(args.journal_path)
+        if not root_dir.is_dir():
+            log("ERROR", f"{args.journal_path} is not a directory")
+            return 1
+        found = False
+        for logs_dir in root_dir.glob("*/logs"):
+            journal_file = logs_dir / "journal.json"
+            if journal_file.exists():
+                found = True
+                log("STEP", f"Running pipeline for {journal_file}")
+                import copy
+                args_copy = copy.deepcopy(args)
+                args_copy.journal_path = str(journal_file)
+                run_pipeline_for_journal(str(journal_file), args_copy)
+        if not found:
+            log("ERROR", f"No journal.json found under */logs in {args.journal_path}")
+            return 1
         return 0
+    # Default: single journal_path
+    if args.journal_path:
+        return run_pipeline_for_journal(args.journal_path, args)
+    else:
+        log("INFO", "No journal path provided; using current directory")
+        return run_pipeline_for_journal(str(Path.cwd()), args)
 
 if __name__ == "__main__":
     sys.exit(main())

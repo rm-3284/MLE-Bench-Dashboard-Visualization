@@ -10,14 +10,14 @@ INPUT_JSON = "journal.json"
 OUTPUT_DATA = "journal_with_judgements.json"
 
 # API Setup (Gemini or OpenAI)
-LLM_PROVIDER = "gemini" 
-GEMINI_MODEL = "gemini-2.0-flash" 
-OPENAI_MODEL = "gpt-4o"
+LLM_PROVIDER = "openai" 
+GEMINI_MODEL = "gemini-2.5-flash" 
+OPENAI_MODEL = "gpt-4o-mini"
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or "YOUR_GOOGLE_KEY_HERE"
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or "YOUR_OPENAI_KEY_HERE"
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or ""
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or ""
 
-def get_llm_response(sys_prompt, usr_prompt, max_retries=3):
+def get_llm_response(sys_prompt, usr_prompt, max_retries=2):
     """Handles API calls to the selected provider with exponential backoff retry logic."""
     for attempt in range(max_retries):
         try:

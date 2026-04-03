@@ -9,6 +9,7 @@ from pathlib import Path
 DATA_FILE = "journal_with_judgements.json"
 PLAN_RED_FILE = "plan_redundancy_report.json"
 OUTPUT_FILE = "journal_viz_tree_dashboard.html"
+OUTPUT_DATA_FILE = "journal_viz_tree_dashboard_data.json"
 COMPETITION_NAME = "tensorflow2-question-answering"  # Auto-updated by pipeline
 METRIC_INFO = {
     "NAME": "Micro F1 Score",
@@ -48,20 +49,34 @@ def load_competition_description(competition_name):
         return ""
     
     try:
-        # Try multiple possible paths
-        current_dir = Path.cwd()
-        possible_paths = [
-            current_dir.parent.parent / "mle-bench-fork" / "mlebench" / "competitions" / competition_name / "description.md",
-            Path("/Users/ryomitsuhashi/Desktop/Princeton/Research/MLE bench/mle-bench-fork/mlebench/competitions") / competition_name / "description.md",
-        ]
-        
-        for desc_path in possible_paths:
+        script_dir = Path(__file__).resolve().parent
+        current_dir = Path.cwd().resolve()
+
+        candidate_paths = []
+        seen = set()
+
+        def add_path(path_obj):
+            path_obj = path_obj.resolve()
+            path_key = str(path_obj)
+            if path_key not in seen:
+                seen.add(path_key)
+                candidate_paths.append(path_obj)
+
+        # Check relative to both script location and current working directory, and their parents.
+        # This covers running from visualization_final/, runs/.../logs/, or repo root.
+        for base in [script_dir, current_dir]:
+            for root in [base, *base.parents]:
+                add_path(root / "mle-bench-fork" / "mlebench" / "competitions" / competition_name / "description.md")
+                add_path(root / "mle-bench-hpc" / "mlebench" / "competitions" / competition_name / "description.md")
+                add_path(root / "mlebench" / "competitions" / competition_name / "description.md")
+
+        for desc_path in candidate_paths:
             if desc_path.exists():
                 with open(desc_path, 'r', encoding='utf-8') as f:
                     return f.read()
-        
+
         return ""
-    except Exception as e:
+    except Exception:
         return ""
 
 def analyze_code_redundancy(nodes):
@@ -252,30 +267,50 @@ def main():
         print(f"Error: {DATA_FILE} not found.")
         return
 
-    with open(DATA_FILE, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-        if isinstance(data, dict): data = data.get("nodes", [])
 
-    id_to_node = {n['id']: n for n in data}
-    for n in data:
-        # Handle both old format (parent_id) and new format (parent)
-        pid = n.get('parent_id') or n.get('parent')
-        if not pid or pid not in id_to_node: 
-            n['parent_id'] = 'SUPER_ROOT'
+    with open(DATA_FILE, 'r', encoding='utf-8') as f:
+        raw = json.load(f)
+        if isinstance(raw, dict):
+            data = raw.get("nodes", [])
         else:
-            n['parent_id'] = pid
+            data = raw
+
+    # Exclude heavyweight runtime/debug fields not used by the dashboard UI.
+    excluded_fields = {
+        "_term_out",
+        "ctime",
+        "parent",
+        "submission_csv_path",
+        "exc_info",
+    }
+    for n in data:
+        for key in excluded_fields:
+            n.pop(key, None)
+
+    # Build parent_id using the 'children' field
+    id_to_node = {n['id']: n for n in data}
+    # First, clear all parent_id
+    for n in data:
+        n['parent_id'] = None
+
+    # Assign parent_id based on children field
+    for n in data:
+        children = n.get('children', [])
+        for cid in children:
+            if cid in id_to_node:
+                id_to_node[cid]['parent_id'] = n['id']
+
+    # Any node without a parent_id is a root (except SUPER_ROOT)
+    for n in data:
+        if n['parent_id'] is None:
+            n['parent_id'] = 'SUPER_ROOT'
+
+    for n in data:
         p_code = id_to_node.get(n['parent_id'], {}).get('code', "")
         n['diff_html'] = generate_side_by_side_diff(p_code, n.get('code', ""))
 
     # Load competition description
     description = load_competition_description(COMPETITION_NAME)
-    # Escape special JSON characters in description
-    if description:
-        description = (description
-            .replace('\\', '\\\\')  # Escape backslashes first
-            .replace('"', '\\"')     # Escape quotes
-            .replace('\n', '\\n')    # Escape newlines for JSON
-            .replace('\r', '\\r'))   # Escape carriage returns
     
     data.insert(0, {"id": "SUPER_ROOT", "parent_id": None, "step": 0, "code": "", "is_buggy": False, "description": description})
 
@@ -295,6 +330,18 @@ def main():
     goal_icon = "⬆️" if goal_type == "maximize" else "⬇️"
     goal_text = "Higher is better" if goal_type == "maximize" else "Lower is better"
 
+    # Store heavy dashboard payload in an external JSON file to keep HTML lean.
+    payload = {
+        "stepsData": data,
+        "planRedData": plan_red_map,
+        "codeRedData": code_red_map,
+        "metricName": METRIC_INFO["NAME"],
+        "metricDesc": METRIC_INFO["DESCRIPTION"],
+        "goalType": goal_type,
+        "goalIcon": goal_icon,
+        "goalText": goal_text,
+    }
+
     full_html = """<!DOCTYPE html><html lang="en">""" + HTML_HEAD + """
 <body>
     """ + SIDEBAR_PART + """
@@ -308,14 +355,15 @@ def main():
         """ + STATS_PART + DETAIL_PART + BRANCH_PART + """
     </div>
     <script>
-        const stepsData = """ + json.dumps(data) + """;
-        const planRedData = """ + json.dumps(plan_red_map) + """;
-        const codeRedData = """ + json.dumps(code_red_map) + """;
-        const METRIC_NAME = \"""" + METRIC_INFO['NAME'] + """\";
-        const METRIC_DESC = \"""" + METRIC_INFO['DESCRIPTION'] + """\";
-        const GOAL_TYPE = \"""" + goal_type + """\";
-        const GOAL_ICON = \"""" + goal_icon + """\";
-        const GOAL_TEXT = \"""" + goal_text + """\";
+        const DATA_FILE = \"""" + OUTPUT_DATA_FILE + """\";
+        let stepsData = [];
+        let planRedData = {};
+        let codeRedData = {};
+        let METRIC_NAME = "";
+        let METRIC_DESC = "";
+        let GOAL_TYPE = "maximize";
+        let GOAL_ICON = "⬆️";
+        let GOAL_TEXT = "Higher is better";
         
         // --- CONSTANTS ---
         const CONF_FORCE_DEFAULT = """ + str(FORCE_BUGGY_TO_DEFAULT).lower() + """;
@@ -323,7 +371,26 @@ def main():
         const CONF_DEFAULT_VAL = """ + str(DEFAULT_BUGGY_METRIC) + """;
         
         let treeMap = {};
-        stepsData.forEach(s => treeMap[s.id] = s);
+
+        async function loadDashboardData() {
+            const response = await fetch(DATA_FILE, { cache: "no-store" });
+            if (!response.ok) {
+                throw new Error("Failed to load dashboard data file: " + DATA_FILE);
+            }
+
+            const payload = await response.json();
+            stepsData = payload.stepsData || [];
+            planRedData = payload.planRedData || {};
+            codeRedData = payload.codeRedData || {};
+            METRIC_NAME = payload.metricName || "Metric";
+            METRIC_DESC = payload.metricDesc || "";
+            GOAL_TYPE = payload.goalType || "maximize";
+            GOAL_ICON = payload.goalIcon || (GOAL_TYPE === "minimize" ? "⬇️" : "⬆️");
+            GOAL_TEXT = payload.goalText || (GOAL_TYPE === "minimize" ? "Lower is better" : "Higher is better");
+
+            treeMap = {};
+            stepsData.forEach(s => { treeMap[s.id] = s; });
+        }
 
         function switchTab(n) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -443,15 +510,8 @@ def main():
                 // Display competition description if available
                 const description = step.description || '';
                 if (description) {
-                    // Unescape JSON-escaped content using simple string replacement
-                    let unescapedDesc = description;
-                    unescapedDesc = unescapedDesc.split('\\\\n').join('\\n');
-                    unescapedDesc = unescapedDesc.split('\\\\r').join('\\r');
-                    unescapedDesc = unescapedDesc.split('\\\\"').join('"');
-                    unescapedDesc = unescapedDesc.split('\\\\\\\\').join('\\\\');
-                    
                     // Use marked.js to render markdown
-                    const htmlContent = marked.parse(unescapedDesc);
+                    const htmlContent = marked.parse(description);
                     
                     document.getElementById('detail-verification').style.display = 'block';
                     document.getElementById('detail-verification').innerHTML = `
@@ -582,12 +642,14 @@ def main():
             });
         }
 
-        window.onload = () => { 
+        window.onload = async () => { 
             try {
                 console.log('Dashboard initialization starting...');
                 console.log('D3 available:', typeof d3 !== 'undefined');
                 console.log('Chart available:', typeof Chart !== 'undefined');
-                console.log('stepsData loaded:', stepsData ? stepsData.length + ' nodes' : 'NOT LOADED');
+                
+                await loadDashboardData();
+                console.log('✅ Data loaded:', stepsData.length + ' nodes');
                 
                 initD3();
                 console.log('✅ initD3() completed');
@@ -611,9 +673,13 @@ def main():
     </script>
 </body></html>"""
 
+    with open(OUTPUT_DATA_FILE, 'w', encoding='utf-8') as f:
+        json.dump(payload, f, ensure_ascii=False)
+
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f: 
         f.write(full_html)
         
     print(f"✅ Dashboard generated: {OUTPUT_FILE}")
+    print(f"✅ Dashboard data generated: {OUTPUT_DATA_FILE}")
 
 if __name__ == "__main__": main()

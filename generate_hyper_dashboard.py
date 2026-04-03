@@ -12,8 +12,24 @@ Output:
 
 import os
 import json
+import csv
 from pathlib import Path
 from datetime import datetime
+
+def load_metrics_goal():
+    """Load competition -> goal ('maximize'/'minimize') from metrics.csv."""
+    goal = {}
+    script_dir = Path(__file__).resolve().parent
+    csv_path = script_dir / 'metrics.csv'
+    if csv_path.exists():
+        with open(csv_path, newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                name = row.get('competition_name', '').strip()
+                g = row.get('goal', '').strip().lower()
+                if name and g in ('maximize', 'minimize'):
+                    goal[name] = g
+    return goal
 
 def find_visualization_files(runs_dir):
     """Find all journal_viz_tree_dashboard.html files under runs_dir."""
@@ -41,6 +57,7 @@ def find_visualization_files(runs_dir):
 
 def generate_html(viz_files):
     """Generate HTML dashboard with links to all visualizations."""
+    metrics_goal = load_metrics_goal()
     
     html = f"""
 <!DOCTYPE html>
@@ -59,7 +76,7 @@ def generate_html(viz_files):
             {compare_modal_section()}
     </div>
     {footer_section()}
-    {script_section()}
+    {script_section(metrics_goal)}
 </body>
 </html>
 """
@@ -179,8 +196,12 @@ def footer_section():
     </footer>
 """
 
-def script_section():
-    return r"""
+def script_section(metrics_goal):
+    metrics_goal_js = json.dumps(metrics_goal)
+    return f"""
+    <script>
+        const METRICS_GOAL = {metrics_goal_js};
+    </script>""" + r"""
     <script>
         // Ensure all cards have a compare-checkbox input (for static HTML)
         window.addEventListener('DOMContentLoaded', function() {
@@ -247,9 +268,11 @@ def script_section():
             const info1 = extractRunInfo(card1);
             const info2 = extractRunInfo(card2);
             // Fetch general info and code for both runs
-            const [gen1, code1] = await fetchRunDetails(info1);
-            const [gen2, code2] = await fetchRunDetails(info2);
-            showCompareModal(info1, gen1, code1, info2, gen2, code2);
+            const [details1, details2] = await Promise.all([
+                fetchRunDetails(info1),
+                fetchRunDetails(info2)
+            ]);
+            showCompareModal(info1, details1, info2, details2);
         };
         function extractRunInfo(card) {
             return {
@@ -261,6 +284,7 @@ def script_section():
         async function fetchRunDetails(info) {
             let gen = '';
             let code = '';
+            let displayedStep = 'N/A';
             try {
                 // Compute the JSON path from the HTML path
                 let jsonPath = info.path.replace('journal_viz_tree_dashboard.html', 'journal_with_judgements.json');
@@ -283,17 +307,25 @@ def script_section():
                 // Extract metric from s.metric.value if present and numeric
                 const metricSteps = steps.filter(s => s && s.metric && typeof s.metric.value === 'number');
                 const metricsOnly = metricSteps.map(s => s.metric.value);
-                // Determine maximize/minimize from metric.maximize, but only for steps with value != null
+                // Determine maximize/minimize: use metrics.csv lookup first, fall back to JSON field
+                const compName = info.title.split('_')[0];
                 let maximize = true;
-                for (let s of metricSteps) {
-                    if (typeof s.metric.maximize === 'boolean') {
-                        maximize = s.metric.maximize;
-                        break;
+                if (typeof METRICS_GOAL !== 'undefined' && METRICS_GOAL.hasOwnProperty(compName)) {
+                    maximize = METRICS_GOAL[compName] === 'maximize';
+                } else {
+                    for (let s of metricSteps) {
+                        if (typeof s.metric.maximize === 'boolean') {
+                            maximize = s.metric.maximize;
+                            break;
+                        }
                     }
                 }
                 let best = 'N/A';
                 if (metricsOnly.length > 0) {
                     best = maximize ? Math.max(...metricsOnly) : Math.min(...metricsOnly);
+                }
+                function getMetricValue(step) {
+                    return step && step.metric && typeof step.metric.value === 'number' ? step.metric.value : null;
                 }
                 let stats = `<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:20px;'>` +
                     `<div class=\"section stat-card\"><div class=\"stat-val\">${total}</div><div style=\"color:#888; font-size:11px\">Total Steps</div></div>` +
@@ -305,9 +337,25 @@ def script_section():
                 let bestStep = null;
                 if (steps.length > 0) {
                     if (metricsOnly.length > 0) {
-                        bestStep = steps.reduce((a, b) => (typeof b.metric === 'number' && b.metric > (a.metric || -Infinity) ? b : a), steps[0]);
+                        bestStep = metricSteps.reduce((currentBest, step) => {
+                            if (!currentBest) return step;
+                            const currentValue = getMetricValue(currentBest);
+                            const nextValue = getMetricValue(step);
+                            if (currentValue === null) return step;
+                            if (nextValue === null) return currentBest;
+                            return maximize
+                                ? (nextValue > currentValue ? step : currentBest)
+                                : (nextValue < currentValue ? step : currentBest);
+                        }, null);
                     } else {
                         bestStep = steps[0];
+                    }
+                }
+                if (bestStep) {
+                    if (bestStep.step !== undefined && bestStep.step !== null) {
+                        displayedStep = `Step ${bestStep.step}`;
+                    } else if (bestStep.id) {
+                        displayedStep = `Node ${bestStep.id}`;
                     }
                 }
                 let plan = (bestStep && typeof bestStep.plan === 'string' && bestStep.plan.trim()) ? bestStep.plan : 'N/A';
@@ -327,11 +375,13 @@ def script_section():
                 // Also log error to console for debugging
                 console.error('Error fetching or parsing JSON:', e, jsonPath);
             }
-            return [gen, code];
+            return { gen, code, displayedStep };
         }
-        function showCompareModal(info1, gen1, code1, info2, gen2, code2) {
+        function showCompareModal(info1, details1, info2, details2) {
             const modal = document.getElementById('compareModal');
             const content = document.getElementById('compareContent');
+            const { gen: gen1, code: code1, displayedStep: displayedStep1 } = details1;
+            const { gen: gen2, code: code2, displayedStep: displayedStep2 } = details2;
             // Helper to extract sections robustly
             function extractSection(gen, label, fallback='') {
                 const regex = new RegExp(`<strong>${label}:<\\/strong> <pre.*?>([\\s\\S]*?)<\\/pre>`, 'i');
@@ -380,6 +430,15 @@ def script_section():
                             <td style="font-weight:bold;padding:12px 8px 0 0;vertical-align:top;">Global Statistics</td>
                             <td style="padding:8px 0 8px 0;vertical-align:top;border-right:8px solid transparent;">${extractStats(gen1)}</td>
                             <td style="padding:8px 0 8px 0;vertical-align:top;">${extractStats(gen2)}</td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight:bold;padding:12px 8px 0 0;vertical-align:top;">Displayed Step</td>
+                            <td style="padding:8px 0 8px 0;vertical-align:top;border-right:8px solid transparent;">
+                                <div style='background:#f8f8f8;border-radius:8px;padding:16px;font-weight:600;'>${escapeHtml(displayedStep1)}</div>
+                            </td>
+                            <td style="padding:8px 0 8px 0;vertical-align:top;">
+                                <div style='background:#f8f8f8;border-radius:8px;padding:16px;font-weight:600;'>${escapeHtml(displayedStep2)}</div>
+                            </td>
                         </tr>
                         <tr>
                             <td style="font-weight:bold;padding:12px 8px 0 0;vertical-align:top;">Plan</td>
